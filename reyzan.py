@@ -405,7 +405,7 @@ def home():
     return "Reyzan Bot is alive!"
 
 def keep_alive():
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8080)
 
 # Jalankan Flask server di thread terpisah
 threading.Thread(target=keep_alive).start()

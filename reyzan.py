@@ -327,12 +327,6 @@ async def help_cmd(event):
 /ubah_pesan <pesan_baru>
 - Ubah isi pesan terbaru sebelum dikirim
 
-/forward forward @channel 10 12345 5 2
-- Forward langsung dari channel (jumlah, jeda, durasi jam)
-
-/forward text <pesan> 10 0 5 2
-- Kirim teks langsung ke grup (dengan durasi)
-
 /simpan_preset <nama> <pesan>
 - Simpan pesan sebagai preset
 

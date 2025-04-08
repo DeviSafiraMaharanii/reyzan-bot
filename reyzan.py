@@ -17,7 +17,7 @@ scheduler = AsyncIOScheduler()
 blacklisted_groups = set()
 job_data = {}
 delay_setting = {}
-MASA_AKTIF = datetime(2025, 5, 30)
+MASA_AKTIF = datetime(2030, 12, 31)
 pesan_simpan = {}  # key: user_id, value: pesan terbaru
 preset_pesan = {}  # key: user_id, value: {nama_preset: isi_pesan}
 
@@ -30,38 +30,41 @@ HARI_MAPPING = {
 async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, durasi_jam):
     start = datetime.now()
     end = start + timedelta(hours=durasi_jam)
-    delay = delay_setting.get(user_id, 5)
-    counter = 0
-    berhasil_dikirim = []
-    gagal_dikirim = []
+    jeda_batch = delay_setting.get(user_id, 5)
+    total_counter = 0
 
-    print(f"[{datetime.now():%H:%M:%S}] [INFO] Mulai meneruskan pesan...")
-    await client.send_message(user_id, "Sedang meneruskan pesan...")
+    print(f"[{datetime.now():%H:%M:%S}] [INFO] Mulai meneruskan pesan secara berulang selama {durasi_jam} jam.")
+    await client.send_message(user_id, f"Sedang meneruskan pesan berulang selama {durasi_jam} jam...")
 
-    async for dialog in client.iter_dialogs():
-        if not dialog.is_group or dialog.name in blacklisted_groups:
-            continue
-        try:
-            if mode == "forward":
-                msg = await client.get_messages(source, ids=int(message_id_or_text))
-                if msg:
-                    await client.forward_messages(dialog.id, msg.id, from_peer=source)
-            else:
-                await client.send_message(dialog.id, message_id_or_text, link_preview=True)
+    while datetime.now() < end:
+        counter = 0
+        async for dialog in client.iter_dialogs():
+            if not dialog.is_group or dialog.name in blacklisted_groups:
+                continue
+            try:
+                if mode == "forward":
+                    msg = await client.get_messages(source, ids=int(message_id_or_text))
+                    if msg:
+                        await client.forward_messages(dialog.id, msg.id, from_peer=source)
+                else:
+                    await client.send_message(dialog.id, message_id_or_text, link_preview=True)
 
-            counter += 1
-            berhasil_dikirim.append(dialog.name)
-            print(f"[{datetime.now():%H:%M:%S}] [BERHASIL] Dikirim ke grup: {dialog.name}")
-            await asyncio.sleep(delay)
+                counter += 1
+                total_counter += 1
+                print(f"[{datetime.now():%H:%M:%S}] [BERHASIL] Dikirim ke grup: {dialog.name}")
 
-        except Exception as e:
-            gagal_dikirim.append(f"{dialog.name} — {e}")
-            print(f"[{datetime.now():%H:%M:%S}] [ERROR] Gagal kirim ke {dialog.name}: {e}")
+                if counter >= jumlah_grup:
+                    break
 
-        if datetime.now() > end or counter >= jumlah_grup:
-            break
+            except Exception as e:
+                print(f"[{datetime.now():%H:%M:%S}] [ERROR] Gagal kirim ke {dialog.name}: {e}")
+                continue
 
-    print(f"[{datetime.now():%H:%M:%S}] [INFO] Forward selesai: {counter} berhasil, {len(gagal_dikirim)} gagal.")
+        print(f"[{datetime.now():%H:%M:%S}] [INFO] Batch {counter} grup selesai. Tunggu {jeda_batch} detik...")
+        await asyncio.sleep(jeda_batch)
+
+    print(f"[{datetime.now():%H:%M:%S}] [INFO] Forward selesai. Total {total_counter} grup selama {durasi_jam} jam.")
+    await client.send_message(user_id, f"Forward selesai. Total dikirim ke {total_counter} grup selama {durasi_jam} jam.")
 
     # Kirim hasil ke user Telegram
     teks = f"== Forward selesai ==\n\n"
@@ -69,9 +72,9 @@ async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, du
     teks += f"Total gagal: {len(gagal_dikirim)}\n\n"
 
     if berhasil_dikirim:
-        teks += "== Grup berhasil ==\n" + "\n".join(f"- {g}" for g in berhasil_dikirim[:30])  # Batasi biar ga terlalu panjang
-        if len(berhasil_dikirim) > 30:
-            teks += f"\n...dan {len(berhasil_dikirim) - 30} grup lainnya."
+        teks += "== Grup berhasil ==\n" + "\n".join(f"- {g}" for g in berhasil_dikirim[:10])  # Batasi biar ga terlalu panjang
+        if len(berhasil_dikirim) > 10:
+            teks += f"\n...dan {len(berhasil_dikirim) - 10} grup lainnya."
 
     if gagal_dikirim:
         teks += "\n\n== Grup gagal ==\n" + "\n".join(f"- {g}" for g in gagal_dikirim[:10])
@@ -138,13 +141,12 @@ async def forward_sekarang(event):
             jumlah = int(args[3])
             message_id = int(args[4])
             delay = int(args[5])
-            durasi = int(args[6]) if len(args) >= 7 else 1  # default 1 jam
+            durasi = int(args[6]) if len(args) >= 7 else 1
             delay_setting[event.sender_id] = delay
             await forward_job(event.sender_id, mode, source, message_id, jumlah, durasi)
         elif mode == "text":
             text = args[2]
             jumlah = int(args[3])
-            dummy_id = 0
             delay = int(args[5])
             durasi = int(args[6]) if len(args) >= 7 else 1
             delay_setting[event.sender_id] = delay
@@ -160,7 +162,7 @@ async def set_delay(event):
     try:
         delay = int(event.message.message.split()[1])
         delay_setting[event.sender_id] = delay
-        await event.respond(f"Jeda antar pesan diset ke {delay} detik.")
+        await event.respond(f"Jeda antar *batch* diset ke {delay} detik.")
     except:
         await event.respond("Gunakan: /setdelay <detik>")
 
@@ -396,10 +398,10 @@ app = Flask(_name_)
 
 @app.route('/')
 def home():
-    return "Reyzan Bot is alive!"
+    return "Arthur Bot is alive!"
 
 def keep_alive():
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=8000)
 
 # Jalankan Flask server di thread terpisah
 threading.Thread(target=keep_alive).start()

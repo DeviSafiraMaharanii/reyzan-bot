@@ -6,8 +6,8 @@ from apscheduler.triggers.cron import CronTrigger
 import os
 
 # === KONFIGURASI ===
-api_id = 20180196  # Ganti dengan milikmu dari my.telegram.org
-api_hash = '0e2b232f723b0fe9eb4f9088daed30d3'
+api_id = 28708516  # Ganti dengan milikmu dari my.telegram.org
+api_hash = 'd9cf8f299399789fdb9e5921ebc7831a'
 client = TelegramClient("user_session", api_id, api_hash)
 
 # === SCHEDULER ===
@@ -88,29 +88,54 @@ async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, du
 async def schedule_cmd(event):
     args = event.message.message.split(maxsplit=2)
     if len(args) < 3:
-        return await event.respond("Format salah:\n/scheduleforward text Halo! 10 2 5 senin,jumat 08:00")
+        return await event.respond("Format salah:\n"
+                                   "/scheduleforward text <pesan> <jumlah> <durasi> <jeda> <hari> <waktu>\n"
+                                   "atau\n"
+                                   "/scheduleforward forward @channel <jumlah> <msg_id> <jeda> <durasi> <hari> <waktu>")
 
     try:
-        mode = args[1]
-        sisa = args[2].rsplit(" ", 5)
-        if len(sisa) != 6:
-            return await event.respond("Format tidak sesuai. Cek jumlah argumen.")
+        mode = args[1].lower()
 
-        isi_pesan, jumlah, durasi, jeda, hari_str, waktu = sisa
-        hari_list = [HARI_MAPPING.get(h.lower()) for h in hari_str.split(",")]
+        if mode == "text":
+            # Format: /scheduleforward text Halo! 10 2 5 senin,jumat 08:00
+            sisa = args[2].rsplit(" ", 5)
+            if len(sisa) != 6:
+                return await event.respond("Format salah.\nGunakan: /scheduleforward text <pesan> <jumlah> <durasi> <jeda> <hari> <waktu>")
 
+            isi_pesan, jumlah, durasi, jeda, hari_str, waktu = sisa
+            jumlah, durasi, jeda = int(jumlah), int(durasi), int(jeda)
+
+            source = ""
+            message_id = isi_pesan  # isi pesan teks
+        elif mode == "forward":
+            # Format: /scheduleforward forward @channel 10 12345 5 2 senin,jumat 08:00
+            sisa = args[2].split(" ")
+            if len(sisa) != 7:
+                return await event.respond("Format salah.\nGunakan: /scheduleforward forward @channel <jumlah> <msg_id> <jeda> <durasi> <hari> <waktu>")
+
+            source, jumlah, message_id, jeda, durasi, hari_str, waktu = sisa
+            jumlah, message_id, jeda, durasi = int(jumlah), int(message_id), int(jeda), int(durasi)
+
+        else:
+            return await event.respond("Mode harus 'text' atau 'forward'.")
+
+        hari_list = [HARI_MAPPING.get(h.strip().lower()) for h in hari_str.split(",")]
         if None in hari_list:
             return await event.respond("Ada nama hari yang tidak valid. Gunakan: senin-minggu.")
 
-        jumlah, durasi, jeda = int(jumlah), int(durasi), int(jeda)
         jam, menit = map(int, waktu.split(":"))
 
         for hari_eng in hari_list:
             job_id = f"{event.sender_id}{hari_eng}{datetime.now().timestamp()}"
+
             job_data[job_id] = {
-                "user": event.sender_id, "mode": mode, "source": "",
-                "message": isi_pesan, "jumlah": jumlah,
-                "durasi": durasi, "jeda": jeda
+                "user": event.sender_id,
+                "mode": mode,
+                "source": source,
+                "message": message_id,
+                "jumlah": jumlah,
+                "durasi": durasi,
+                "jeda": jeda
             }
 
             delay_setting[event.sender_id] = jeda
@@ -118,12 +143,12 @@ async def schedule_cmd(event):
             scheduler.add_job(
                 forward_job,
                 trigger=CronTrigger(day_of_week=hari_eng, hour=jam, minute=menit),
-                args=[event.sender_id, mode, "", isi_pesan, jumlah, durasi],
+                args=[event.sender_id, mode, source, message_id, jumlah, durasi],
                 id=job_id
             )
 
         daftar_hari = ", ".join(hari_str.title().split(","))
-        await event.respond(f"Jadwal ditambahkan untuk hari {daftar_hari} pukul {waktu}.")
+        await event.respond(f"Jadwal berhasil ditambahkan untuk hari {daftar_hari} pukul {waktu}.")
 
     except Exception as e:
         await event.respond(f"Error: {e}")
@@ -398,10 +423,10 @@ app = Flask(_name_)
 
 @app.route('/')
 def home():
-    return "Arthur Bot is alive!"
+    return "Vine Bot is alive!"
 
 def keep_alive():
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8080)
 
 # Jalankan Flask server di thread terpisah
 threading.Thread(target=keep_alive).start()

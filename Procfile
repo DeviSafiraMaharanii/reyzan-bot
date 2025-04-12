@@ -1,1 +1,1 @@
-worker: python reyzan.py
+worker: python seblist.py

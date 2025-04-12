@@ -132,7 +132,7 @@ async def schedule_cmd(event):
             )
 
         daftar_hari = ", ".join(hari_str.title().split(","))
-        await event.respond(f"Jadwal ditambahkan untuk hari {daftar_hari} pukul {waktu}.")
+        await event.respond(f"Jadwal ditambahkan untuk hari {daftar_hari} pukul {waktu} yaa.")
 
     except Exception as e:
         await event.respond(f"Error: {e}")
@@ -141,7 +141,7 @@ async def schedule_cmd(event):
 async def forward_sekarang(event):
     args = event.message.message.split(maxsplit=7)
     if len(args) < 7:
-        return await event.respond("Format salah:\n/forward forward @channel 5 12345 5 2 300")
+        return await event.respond("Format salah sayang~:\n/forward forward @channel 5 12345 5 2 300")
 
     try:
         mode = args[1]
@@ -185,12 +185,29 @@ async def set_delay(event):
 
 @client.on(events.NewMessage(pattern='/review'))
 async def review_jobs(event):
-    teks = "== Jadwal Aktif ==\n"
-    if not job_data:
-        teks += "Tidak ada jadwal."
+    user_id = event.sender_id
+    teks = "== Jadwal Aktif Milikmu ==\n"
+
+    user_jobs = {job_id: info for job_id, info in job_data.items() if info["user"] == user_id}
+    
+    if not user_jobs:
+        teks += "Kamu belum punya jadwal aktif apa pun, sayangg~"
     else:
-        for job_id, info in job_data.items():
-            teks += f"- ID: {job_id}\n  Mode: {info['mode']}\n  Grup: {info['jumlah']}\n  Durasi: {info['durasi']} jam\n"
+        for i, (job_id, info) in enumerate(user_jobs.items(), 1):
+            teks += (
+                f"\n[{i}] ID: {job_id}\n"
+                f"• Mode: {info['mode']}\n"
+                f"• Jumlah Grup / Batch: {info['jumlah']}\n"
+                f"• Durasi: {info['durasi']} jam\n"
+                f"• Jeda: {info['jeda']} detik\n"
+                f"• Maks. per Hari: {info['jumlah_pesan']} pesan\n"
+            )
+            if info['mode'] == "text":
+                potong = info["message"]
+                if len(potong) > 80:
+                    potong = potong[:77] + "..."
+                teks += f"• Isi Pesan: {potong}\n"
+
     await event.respond(teks)
 
 @client.on(events.NewMessage(pattern='/deletejob'))
@@ -216,19 +233,29 @@ async def add_blacklist(event):
 async def remove_blacklist(event):
     try:
         nama = " ".join(event.message.message.split()[1:])
-        blacklisted_groups.discard(nama)
-        await event.respond(f"'{nama}' dihapus dari blacklist.")
-    except:
-        await event.respond("Format salah.")
+        if not nama:
+            return await event.respond("Ups, kamu belum kasih nama grupnya.\nContoh: /blacklist_remove Nama Grup")
+
+        if nama in blacklisted_groups:
+            blacklisted_groups.discard(nama)
+            await event.respond(f"Yey! Grup *'{nama}'* udah berhasil dihapus dari blacklist.")
+        else:
+            await event.respond(f"Hmm... Grup *'{nama}'* nggak ada di dalam blacklist.")
+    except Exception as e:
+        await event.respond("Ada yang salah formatnya.\nGunakan: /blacklist_remove <nama grup>")
 
 @client.on(events.NewMessage(pattern='/list_blacklist'))
 async def list_blacklist(event):
-    if not blacklisted_groups:
-        await event.respond("Blacklist kosong.")
-    else:
-        teks = "== Grup dalam blacklist ==\n"
-        teks += "\n".join(blacklisted_groups)
-        await event.respond(teks)
+    try:
+        if not blacklisted_groups:
+            await event.respond("Blacklist-nya masih kosong, sayangg~")
+        else:
+            teks = "== Grup yang masuk blacklist ==\n"
+            for i, grup in enumerate(sorted(blacklisted_groups), 1):
+                teks += f"{i}. {grup}\n"
+            await event.respond(teks)
+    except Exception as e:
+        await event.respond(f"Oops, error pas nampilin blacklist: {e}")
 
 @client.on(events.NewMessage(pattern='/status'))
 async def cek_status(event):
@@ -257,6 +284,23 @@ async def ubah_pesan(event):
     except:
         await event.respond("Format salah. Gunakan:\n/ubah_pesan <pesan_baru>")
 
+@client.on(events.NewMessage(pattern='/stop'))
+async def stop_cmd(event):
+    user_id = event.sender_id
+    removed = []
+
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(str(user_id)):
+            scheduler.remove_job(job.id)
+            removed.append(job.id)
+            if job.id in job_data:
+                del job_data[job.id]
+
+    if removed:
+        await event.respond(f"Semua jadwal kamu berhasil dihentikan ({len(removed)} job).")
+    else:
+        await event.respond("Kamu tidak punya jadwal aktif yang bisa dihentikan.")
+
 @client.on(events.NewMessage(pattern='/simpan_preset'))
 async def simpan_preset(event):
     try:
@@ -271,14 +315,21 @@ async def simpan_preset(event):
 async def pakai_preset(event):
     try:
         user_id = event.sender_id
-        nama = event.message.message.split(" ", maxsplit=1)[1]
+        args = event.message.message.split(" ", maxsplit=1)
+        if len(args) < 2:
+            return await event.respond("Format salah yaa, sayangg~\nGunakan: /pakai_preset <nama>")
+        
+        nama = args[1].strip()
         pesan = preset_pesan.get(user_id, {}).get(nama)
+
         if not pesan:
-            return await event.respond(f"Tidak ada preset dengan nama '{nama}'")
+            return await event.respond(f"Preset dengan nama '{nama}' nggak ditemukan, coba cek lagi pakai /list_preset yaa~")
+
         pesan_simpan[user_id] = pesan
-        await event.respond(f"Preset '{nama}' dipilih:\n\n{pesan}")
-    except:
-        await event.respond("Format salah.\n/pakai_preset <nama>")
+        await event.respond(f"Preset '{nama}' berhasil dipilih, sayangg!\n\nIsi pesan:\n{pesan}")
+    
+    except Exception as e:
+        await event.respond(f"Ada yang salah saat memilih preset: {e}")
 
 @client.on(events.NewMessage(pattern='/list_preset'))
 async def list_preset(event):
@@ -383,6 +434,7 @@ Contoh mode text:
 - /review — Lihat semua jadwal aktif  
 - /deletejob <id> — Hapus jadwal by ID  
 - /setdelay <detik> — Atur jeda antar batch forward  
+- /stop — Hentikan semua jadwal aktif kamu
 
 ---
 

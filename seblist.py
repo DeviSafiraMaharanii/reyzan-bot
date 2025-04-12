@@ -319,7 +319,7 @@ async def hapus_preset(event):
 @client.on(events.NewMessage(pattern='/start'))
 async def start_cmd(event):
     teks = (
-        "*Hai! Aku userbot Heartie! Siap bantu forward otomatis ke grup-grup kamu!*\n\n"
+        "Hai! Aku userbot Heartie! Siap bantu forward otomatis ke grup-grup kamu!\n\n"
         "Gunakan perintah berikut:\n"
         "- /forward — Langsung kirim pesan\n"
         "- /scheduleforward — Jadwalkan kirim pesan mingguan\n"
@@ -334,27 +334,27 @@ async def start_cmd(event):
 @client.on(events.NewMessage(pattern='/help'))
 async def help_cmd(event):
     teks = """
-*✨ PANDUAN USERBOT HEARTIE ✨*
+✨ PANDUAN USERBOT HEARTIE ✨
 
 Haii! Aku userbot Heartie milik kamu, siap bantu sebar-sebar pesan ke grup dengan gaya dan cinta~  
 Yuk intip jurus-jurus cintaku:
 
-*1. /forward*  
+1. /forward  
 Langsung kirim pesan ke grup tanpa jadwal!  
 
-Mode *forward* (dari channel):
+Mode forward (dari channel):
 /forward forward @namachannel jumlah_grup id_pesan jeda detik durasi jam jumlah_pesan_perhari  
 Contoh:  
 /forward forward @usnchannel 50 27 5 3 300  
 
-Mode *text* (kirim teks langsung):  
+Mode text (kirim teks langsung):  
 /forward text isipesan jumlah_grup jeda detik durasi jam jumlah_pesan_perhari  
 Contoh:  
 /forward text Halo semua! 50 5 3 300  
 
 ---
 
-*2. /scheduleforward*  
+2. /scheduleforward  
 Jadwalin pesan mingguan otomatis~  
 
 Format umum:  
@@ -368,7 +368,7 @@ Contoh mode text:
 
 ---
 
-*3. Preset dan Kontrol Pesan:*  
+3. Preset dan Kontrol Pesan:  
 - /review_pesan — Lihat isi pesan terakhir  
 - /ubah_pesan <pesan_baru> — Ganti isi pesan  
 - /simpan_preset <nama> <pesan> — Simpan pesan sebagai preset  
@@ -379,29 +379,29 @@ Contoh mode text:
 
 ---
 
-*4. Jadwal dan Delay:*  
+4. Jadwal dan Delay:  
 - /review — Lihat semua jadwal aktif  
 - /deletejob <id> — Hapus jadwal by ID  
 - /setdelay <detik> — Atur jeda antar batch forward  
 
 ---
 
-*5. Blacklist Grup:*  
+5. Blacklist Grup:  
 - /blacklist_add <namagrup> — Tambahkan ke daftar hitam  
 - /blacklist_remove <namagrup> — Keluarkan dari blacklist  
 - /list_blacklist — Cek siapa aja yang diblacklist  
 
 ---
 
-*6. Info & Bantuan:*  
+6. Info & Bantuan:  
 - /status — Cek masa aktif bot kamu  
 - /help — Tampilkan panduan ini  
 
 ---
 
-*💗: Gimana cara dapetin ID pesan dari channel?*  
+💗: Gimana cara dapetin ID pesan dari channel?  
 Gampang! Klik di bagian kosong dekat pesan di channel, copy linknya!  
-Misal: https://t.me/usnchannel/19 → *19* itu ID-nya~
+Misal: https://t.me/usnchannel/19 → 19 itu ID-nya~
 
 ---
 

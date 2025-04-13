@@ -20,8 +20,6 @@ delay_setting = {}
 MASA_AKTIF = datetime(2030, 12, 31)
 pesan_simpan = {}  # key: user_id, value: pesan terbaru
 preset_pesan = {}  # key: user_id, value: {nama_preset: isi_pesan}
-custom_text_map = {}    # user_id -> {nama_grup: pesan teks}
-custom_forward_map = {} # user_id -> {nama_grup: (channel, message_id)}
 
 HARI_MAPPING = {
     "senin": "monday", "selasa": "tuesday", "rabu": "wednesday",
@@ -30,71 +28,67 @@ HARI_MAPPING = {
 
 # === FORWARDING ===
 async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, durasi_jam, jumlah_pesan):
-    start = datetime.now()
-    end = start + timedelta(hours=durasi_jam)
-    jeda_batch = delay_setting.get(user_id, 5)
+start = datetime.now()
+end = start + timedelta(hours=durasi_jam)
+jeda_batch = delay_setting.get(user_id, 5)
 
-    now = datetime.now()
-    next_reset = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-    harian_counter = 0
-    total_counter = 0
+now = datetime.now()  
+next_reset = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)  
+harian_counter = 0  
+total_counter = 0  
 
-    custom_map = custom_message_map.get(user_id, {})  # Ambil mapping pesan custom per grup
-    print(f"[{now:%H:%M:%S}] [INFO] Mulai meneruskan pesan selama {durasi_jam} jam.")
-    await client.send_message(user_id, f"Sedang meneruskan pesan...\nDurasi: {durasi_jam} jam\nTarget harian: {jumlah_pesan} pesan.")
+print(f"[{now:%H:%M:%S}] [INFO] Mulai meneruskan pesan selama {durasi_jam} jam.")  
+await client.send_message(user_id, f"Sedang meneruskan pesan...\nDurasi: {durasi_jam} jam\nTarget harian: {jumlah_pesan} pesan.")  
 
-    while datetime.now() < end:
-        if datetime.now() >= next_reset:
-            harian_counter = 0
-            next_reset += timedelta(days=1)
-            print(f"[{datetime.now():%H:%M:%S}] [INFO] Reset harian. Melanjutkan pengiriman hari berikutnya.")
+while datetime.now() < end:  
+    if datetime.now() >= next_reset:  
+        harian_counter = 0  
+        next_reset += timedelta(days=1)  
+        print(f"[{datetime.now():%H:%M:%S}] [INFO] Reset harian. Melanjutkan pengiriman hari berikutnya.")  
 
-        counter = 0
-        async for dialog in client.iter_dialogs():
-            if datetime.now() >= end or harian_counter >= jumlah_pesan:
-                break
-            if not dialog.is_group or dialog.name in blacklisted_groups:
-                continue
+    counter = 0  
+    async for dialog in client.iter_dialogs():  
+        if datetime.now() >= end:  
+            break  
+        if harian_counter >= jumlah_pesan:  
+            break  
+        if not dialog.is_group or dialog.name in blacklisted_groups:  
+            continue  
+        try:  
+            if mode == "forward":  
+                msg = await client.get_messages(source, ids=int(message_id_or_text))  
+                if msg:  
+                    await client.forward_messages(dialog.id, msg.id, from_peer=source)  
+            else:  
+                await client.send_message(dialog.id, message_id_or_text, link_preview=True)  
 
-            try:
-                # Gunakan pesan custom jika tersedia
-                pesan_custom = custom_map.get(dialog.name)
+            counter += 1  
+            harian_counter += 1  
+            total_counter += 1  
+            print(f"[{datetime.now():%H:%M:%S}] [BERHASIL] Dikirim ke grup: {dialog.name}")  
 
-                if mode == "forward":
-                    msg_id = int(message_id_or_text)
-                    if pesan_custom:  # Jika custom, ambil ID dari pesan lain
-                        msg_id = int(pesan_custom)
-                    msg = await client.get_messages(source, ids=msg_id)
-                    if msg:
-                        await client.forward_messages(dialog.id, msg.id, from_peer=source)
-                else:
-                    teks = pesan_custom if pesan_custom else message_id_or_text
-                    await client.send_message(dialog.id, teks, link_preview=True)
+            if counter >= jumlah_grup or harian_counter >= jumlah_pesan:  
+                break  
 
-                counter += 1
-                harian_counter += 1
-                total_counter += 1
-                print(f"[{datetime.now():%H:%M:%S}] [BERHASIL] Dikirim ke grup: {dialog.name}")
+        except Exception as e:  
+            print(f"[{datetime.now():%H:%M:%S}] [ERROR] Gagal kirim ke {dialog.name}: {e}")  
+            continue  
 
-                if counter >= jumlah_grup or harian_counter >= jumlah_pesan:
-                    break
+    if harian_counter >= jumlah_pesan:  
+        notif = f"Target harian {jumlah_pesan} pesan tercapai.\nBot akan lanjut besok pada jam yang sama, sayangg!"  
+        print(f"[{datetime.now():%H:%M:%S}] [INFO] {notif}")  
+        await client.send_message(user_id, notif)  
 
-            except Exception as e:
-                print(f"[{datetime.now():%H:%M:%S}] [ERROR] Gagal kirim ke {dialog.name}: {e}")
-                continue
+        # Tunggu sampai hari berikutnya (next_reset)  
+        sleep_seconds = (next_reset - datetime.now()).total_seconds()  
+        await asyncio.sleep(sleep_seconds)  
+    else:  
+        print(f"[{datetime.now():%H:%M:%S}] [INFO] Batch {counter} grup selesai. Jeda {jeda_batch} detik...")  
+        await asyncio.sleep(jeda_batch)  
 
-        if harian_counter >= jumlah_pesan:
-            notif = f"Target harian {jumlah_pesan} pesan tercapai.\nBot akan lanjut besok pada jam yang sama."
-            print(f"[{datetime.now():%H:%M:%S}] [INFO] {notif}")
-            await client.send_message(user_id, notif)
-            await asyncio.sleep((next_reset - datetime.now()).total_seconds())
-        else:
-            print(f"[{datetime.now():%H:%M:%S}] [INFO] Batch {counter} grup selesai. Jeda {jeda_batch} detik...")
-            await asyncio.sleep(jeda_batch)
-
-    selesai = f"Forward selesai!\nTotal terkirim ke {total_counter} grup selama {durasi_jam} jam."
-    print(f"[{datetime.now():%H:%M:%S}] [INFO] {selesai}")
-    await client.send_message(user_id, selesai)
+selesai = f"Forward selesai!\nTotal terkirim ke {total_counter} grup selama {durasi_jam} jam."  
+print(f"[{datetime.now():%H:%M:%S}] [INFO] {selesai}")  
+await client.send_message(user_id, selesai)
 
 # === PERINTAH ===
 @client.on(events.NewMessage(pattern='/scheduleforward'))
@@ -198,85 +192,6 @@ async def review_jobs(event):
         for job_id, info in job_data.items():
             teks += f"- ID: {job_id}\n  Mode: {info['mode']}\n  Grup: {info['jumlah']}\n  Durasi: {info['durasi']} jam\n"
     await event.respond(teks)
-
-@client.on(events.NewMessage(pattern='/custom'))
-async def set_custom_pesan(event):
-    try:
-        user_id = event.sender_id
-        msg = event.raw_text.split("\n", maxsplit=1)
-        if len(msg) < 2:
-            return await event.respond("Format salah. Gunakan:\n/custom\nNama Grup|Pesan ATAU @channel/123")
-
-        lines = msg[1].strip().split("\n")
-        for line in lines:
-            if "|" in line:
-                grup, isi = line.split("|", maxsplit=1)
-                grup = grup.strip()
-                isi = isi.strip()
-
-                if isi.startswith("@") and "/" in isi:
-                    # Mode forward
-                    channel, msg_id = isi.split("/", maxsplit=1)
-                    if user_id not in custom_forward_map:
-                        custom_forward_map[user_id] = {}
-                    custom_forward_map[user_id][grup] = (channel.strip(), int(msg_id.strip()))
-                else:
-                    # Mode teks
-                    if user_id not in custom_text_map:
-                        custom_text_map[user_id] = {}
-                    custom_text_map[user_id][grup] = isi
-
-        await event.respond("Custom pesan berhasil disimpan untuk grup.")
-
-    except Exception as e:
-        await event.respond(f"Gagal menyimpan custom pesan.\nError: {e}")
-
-@client.on(events.NewMessage(pattern='/review_custom'))
-async def review_custom(event):
-    user_id = event.sender_id
-    teks = "== Custom Pesan Tersimpan ==\n\n"
-
-    data_text = custom_text_map.get(user_id, {})
-    data_forward = custom_forward_map.get(user_id, {})
-
-    if not data_text and not data_forward:
-        return await event.respond("Ngga ada custom pesan yang tersimpan bubb.")
-
-    if data_text:
-        teks += "== Mode TEXT ==\n"
-        for grup, pesan in data_text.items():
-            teks += f"- {grup}: {pesan}\n"
-
-    if data_forward:
-        teks += "\n== Mode FORWARD ==\n"
-        for grup, (chan, msgid) in data_forward.items():
-            teks += f"- {grup}: {chan}/{msgid}\n"
-
-    await event.respond(teks)
-
-@client.on(events.NewMessage(pattern='/hapus_custom'))
-async def hapus_custom(event):
-    try:
-        user_id = event.sender_id
-        parts = event.raw_text.split(maxsplit=1)
-        if len(parts) < 2:
-            return await event.respond("Format salah ayy, gimana si. Gunakan:\n/hapus_custom <nama grup>")
-
-        nama = parts[1].strip()
-
-        removed = False
-        for m in (custom_text_map, custom_forward_map):
-            if user_id in m and nama in m[user_id]:
-                del m[user_id][nama]
-                removed = True
-
-        if removed:
-            await event.respond(f"Custom untuk '{nama}' berhasil dihapus!")
-        else:
-            await event.respond(f"Tidak ditemukan custom untuk '{nama}' :(")
-
-    except Exception as e:
-        await event.respond(f"Yahh gagal menghapus custom ayy.\nError: {e}")
 
 @client.on(events.NewMessage(pattern='/deletejob'))
 async def delete_job(event):
@@ -388,6 +303,10 @@ async def edit_preset(event):
     except:
         await event.respond("Format salah.\n/edit_preset <nama> <pesan_baru>")
 
+@client.on(events.NewMessage(pattern='/ping'))
+async def ping(event):
+    await event.respond("Bot aktif dan siap melayani!")
+
 @client.on(events.NewMessage(pattern='/hapus_preset'))
 async def hapus_preset(event):
     try:
@@ -415,6 +334,50 @@ async def start_cmd(event):
         "Ketik /help untuk info lengkap yaa!"
     )
     await event.respond(teks)
+
+@client.on(events.NewMessage(pattern='/info'))
+async def info(event):
+    teks = (
+        "🤖 Info Bot:\n"
+        "- Nama: Heartie Bot\n"
+        "- Versi: 1.0\n"
+        "- Fungsi: Forward otomatis ke grup.\n"
+        "Gunakan /help untuk panduan lengkap."
+    )
+    await event.respond(teks)
+
+@client.on(events.NewMessage(pattern='/stop'))
+async def stop(event):
+    try:
+        scheduler.shutdown(wait=False)
+        await event.respond("Semua jadwal forward telah dihentikan.")
+    except Exception as e:
+        await event.respond(f"Gagal menghentikan jadwal: {e}")
+
+@client.on(events.NewMessage(pattern='/restart'))
+async def restart(event):
+    await event.respond("Bot akan restart...")
+    os.execv(_file_, [''])
+
+@client.on(events.NewMessage(pattern='/log'))
+async def log(event):
+    try:
+        with open("bot.log", "r") as log_file:
+            logs = log_file.read()
+            await event.respond(f"📜 Log Terbaru:\n{logs}")
+    except FileNotFoundError:
+        await event.respond("Log tidak ditemukan.")
+
+@client.on(events.NewMessage(pattern='/feedback'))
+async def feedback(event):
+    try:
+        feedback_message = event.message.message.split(maxsplit=1)[1]
+        # Kirim feedback ke admin melalui chat ID tertentu
+        admin_chat_id = 1538087933  # Ganti dengan chat ID admin
+        await client.send_message(admin_chat_id, f"Feedback dari {event.sender_id}:\n{feedback_message}")
+        await event.respond("Terima kasih atas feedback Anda!")
+    except IndexError:
+        await event.respond("Format salah! Gunakan: /feedback <pesan>")
 
 @client.on(events.NewMessage(pattern='/help'))
 async def help_cmd(event):
@@ -452,17 +415,7 @@ Contoh mode text:
 /scheduleforward text Halo dari bot! 30 3 5 300 selasa,rabu 10:00
 
 ============================
-3. Custom Pesan per Grup
-Buat tiap grup dapat pesan berbeda!
-
-- /custom <namagrup> <pesan> — Atur pesan khusus untuk grup tertentu  
-- /review_custom — Tampilkan semua pesan custom yang disimpan  
-- /hapus_custom <namagrup> — Hapus pesan custom untuk grup itu  
-
-Jika kamu pakai /forward atau /scheduleforward mode text, maka pesan custom akan otomatis dipakai untuk grup yang sesuai.
-
-============================
-4. Preset dan Kontrol Pesan
+3. Preset dan Kontrol Pesan
 - /review_pesan — Lihat isi pesan default  
 - /ubah_pesan <pesan_baru> — Ganti isi pesan default  
 - /simpan_preset <nama> <pesan> — Simpan preset pesan  
@@ -470,23 +423,29 @@ Jika kamu pakai /forward atau /scheduleforward mode text, maka pesan custom akan
 - /list_preset — Lihat semua preset  
 - /edit_preset <nama> <pesan_baru> — Edit preset  
 - /hapus_preset <nama> — Hapus preset
+- /stop — Menghentikan semua jaddwal forward yang sedang berjalan
 
 ============================
-5. Jadwal dan Delay
+4. Jadwal dan Delay
 - /review — Lihat semua jadwal aktif  
 - /deletejob <id> — Hapus jadwal by ID  
 - /setdelay <detik> — Atur jeda antar batch kirim  
 
 ============================
-6. Blacklist Grup
+5. Blacklist Grup
 - /blacklist_add <namagrup> — Tambahkan grup ke blacklist  
 - /blacklist_remove <namagrup> — Keluarkan dari blacklist  
 - /list_blacklist — Lihat daftar blacklist  
 
 ============================
-7. Info & Bantuan
+6. Info & Bantuan
 - /status — Cek masa aktif akun kamu  
 - /help — Tampilkan panduan ini  
+- /ping — Buat periksa apakah bot udah aktif & responsif
+- /info — Cek info dasar dari bot
+- /restart — Untuk merestart bot
+- /log — Melihat log aktivitas bot terbaru
+- /feedback <pesan> — Mengirim umpan balik (feedback) ke pengembang bot
 
 ============================
 

@@ -523,7 +523,7 @@ async def main():
 
 
 # === Keep Alive dengan Flask (untuk platform seperti Railway) ===
-app = Flask(_name_)
+app = Flask(__name__)
 
 @app.route('/')
 def home():
@@ -539,5 +539,5 @@ flask_thread.start()
 
 
 # === Jalankan Bot ===
-if _name_ == "_main_":
+if __name__ == "__main__":
     asyncio.run(main())

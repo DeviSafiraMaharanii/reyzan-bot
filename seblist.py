@@ -28,9 +28,9 @@ HARI_MAPPING = {
 
 # === FORWARDING ===
 async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, durasi_jam, jumlah_pesan):
-start = datetime.now()
-end = start + timedelta(hours=durasi_jam)
-jeda_batch = delay_setting.get(user_id, 5)
+    start = datetime.now()
+    end = start + timedelta(hours=durasi_jam)
+    jeda_batch = delay_setting.get(user_id, 5)
 
 now = datetime.now()  
 next_reset = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)  
